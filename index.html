@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Okiiparty</title>
+
+  <style>
+  * {padding:0; margin: 0}
+  body {background: black}
+
+  video {
+    width: 100%;
+    height: 100%;
+    object-fit: content;
+  }
+
+  .banner {
+    padding: 1rem;
+    margin: 1rem;
+    outline: .1rem solid #fefefe;
+    border-radius: 1rem;
+    backdrop-filter: blur(10px) brightness(60%);
+    box-sizing: border-box;
+    color: #eee;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 4;
+    font-family: monospace;
+    font-size: 1rem;
+    abbr {
+      text-decoration: none;
+    }
+  }
+  </style>
+</head>
+
+<body>
+  <div class="banner">
+  <abbr title="Okiiparty - Made with ❤️ for pookie">The stream is muted because autoplay requires audio to be switched off. Please unmute the stream and I will disappear.</abbr>
+  </div>
+  
+  <video muted controls>
+    <source src="/stream" type="video/mp4">
+  </video>
+
+  <script>
+  const loc = window.location;
+  let proto = loc.protocol == "https:" ? "wss:" : "ws:";
+  let host = loc.host;
+  let wsUri = `${proto}//${host}/broker`;
+  const socket = new WebSocket(wsUri);
+  const video = document.querySelector("video");
+  const banner = document.querySelector(".banner");
+  let requestedWait = false
+
+  function broadcastSeek() {
+    broadcast({
+      action: "seek",
+      time: video.currentTime
+    })
+  }
+
+  function broadcastPlay() {
+    broadcast({action: "play"})
+  }
+
+  function broadcastPause() {
+    console.log("you paused")
+    broadcast({action: "pause"})
+  }
+
+  function messageHandler(event) {
+    let message = JSON.parse(event.data)
+    if (message.action == "play") {
+      video.removeEventListener("play", broadcastPlay)
+      console.log("someone played")
+      video.play()
+      video.addEventListener("play", () => { video.addEventListener("play", broadcastPlay) })
+    }
+    if (message.action == "pause") {
+      video.removeEventListener("pause", broadcastPause)
+      console.log("someone paused")
+      video.pause()
+      video.addEventListener("pause", () => { video.addEventListener("pause", broadcastPause) })
+    }
+    if (message.action == "wait") {
+      if (!video.paused) video.pause()
+      video.controls = false
+    }
+    if (message.action == "canplay") {
+      video.controls = true
+    }
+
+    if (message.action == "seek") {
+      video.removeEventListener("seeked", broadcastSeek)
+      video.currentTime = message.time
+      // this one time, let the event not propagate
+      video.addEventListener("seeked", () => { video.addEventListener("seeked", broadcastSeek) })
+    }
+  }
+
+  socket.addEventListener("message", messageHandler)
+  function broadcast(message) {
+    socket.send(JSON.stringify(message))
+  }
+
+  video.addEventListener("volumechange", () => {
+    banner.style.display = "none";
+  })
+  video.addEventListener("play", broadcastPlay)
+  video.addEventListener("pause", broadcastPause)
+  video.addEventListener("waiting", () => {
+    requestedWait = true
+    broadcast({action: "wait"})
+    video.controls = false
+  })
+
+  video.addEventListener("canplay", () => {
+    if (!requestedWait) {
+      return
+    }
+    broadcast({action: "canplay"})
+    video.controls = true
+    requestedWait = false
+  })
+
+  video.addEventListener("seeked", broadcastSeek)
+  </script>
+</body>
+</html>
