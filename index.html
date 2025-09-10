@@ -54,23 +54,12 @@
   const banner = document.querySelector(".banner");
   let requestedWait = false
 
-  function broadcastSeek() {
-    broadcast({
-      action: "seek",
-      time: video.currentTime
-    })
-  }
+  const broadcast = message => socket.send(JSON.stringify(message));
+  const broadcastSeek = () => broadcast({ action: "seek", time: video.currentTime })
+  const broadcastPlay = () => broadcast({action: "play"});
+  const broadcastPause = () => broadcast({action: "pause"});
 
-  function broadcastPlay() {
-    broadcast({action: "play"})
-  }
-
-  function broadcastPause() {
-    console.log("you paused")
-    broadcast({action: "pause"})
-  }
-
-  function messageHandler(event) {
+  socket.addEventListener("message", (event) => {
     let message = JSON.parse(event.data)
     if (message.action == "play") {
       video.removeEventListener("play", broadcastPlay)
@@ -85,12 +74,10 @@
       video.addEventListener("pause", () => { video.addEventListener("pause", broadcastPause) })
     }
     if (message.action == "wait") {
-      if (!video.paused) video.pause()
+      if (!video.paused) { video.pause() }
       video.controls = false
     }
-    if (message.action == "canplay") {
-      video.controls = true
-    }
+    if (message.action == "canplay") { video.controls = true }
 
     if (message.action == "seek") {
       video.removeEventListener("seeked", broadcastSeek)
@@ -98,16 +85,10 @@
       // this one time, let the event not propagate
       video.addEventListener("seeked", () => { video.addEventListener("seeked", broadcastSeek) })
     }
-  }
-
-  socket.addEventListener("message", messageHandler)
-  function broadcast(message) {
-    socket.send(JSON.stringify(message))
-  }
-
-  video.addEventListener("volumechange", () => {
-    banner.style.display = "none";
   })
+
+  video.addEventListener("volumechange", () => { banner.style.display = "none" })
+
   video.addEventListener("play", broadcastPlay)
   video.addEventListener("pause", broadcastPause)
   video.addEventListener("waiting", () => {
