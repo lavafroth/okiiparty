@@ -37,7 +37,9 @@
 
 <body>
   <div class="banner">
-  <abbr title="Okiiparty - Made with ❤️ for pookie">The stream is muted because autoplay requires audio to be switched off. Please unmute the stream and I will disappear.</abbr>
+    <abbr title="Okiiparty - Made with ❤️ for pookie">
+      The stream is muted because autoplay requires audio to be switched off. Please unmute the stream and I will disappear.
+    </abbr>
   </div>
   
   <video muted controls>
@@ -59,38 +61,30 @@
   const broadcastPlay = () => broadcast({action: "play"});
   const broadcastPause = () => broadcast({action: "pause"});
 
+  // Oneshot block for event propagatation
+  function stepOverEvent(eventType, listener, stepFunction) {
+      video.removeEventListener(eventType, listener)
+      stepFunction(video)
+      video.addEventListener(eventType, () => { video.addEventListener(eventType, listener) })
+  }
+
   socket.addEventListener("message", (event) => {
     let message = JSON.parse(event.data)
-    if (message.action == "play") {
-      video.removeEventListener("play", broadcastPlay)
-      console.log("someone played")
-      video.play()
-      video.addEventListener("play", () => { video.addEventListener("play", broadcastPlay) })
-    }
-    if (message.action == "pause") {
-      video.removeEventListener("pause", broadcastPause)
-      console.log("someone paused")
-      video.pause()
-      video.addEventListener("pause", () => { video.addEventListener("pause", broadcastPause) })
-    }
+    if (message.action == "play") { stepOverEvent("play", broadcastPlay, video => { video.play() }) }
+    if (message.action == "pause") { stepOverEvent("pause", broadcastPause, video => { video.pause() }) }
+    if (message.action == "seek") { stepOverEvent("seeked", broadcastSeek, video => { video.currentTime = message.time }) }
+
     if (message.action == "wait") {
       if (!video.paused) { video.pause() }
       video.controls = false
     }
     if (message.action == "canplay") { video.controls = true }
 
-    if (message.action == "seek") {
-      video.removeEventListener("seeked", broadcastSeek)
-      video.currentTime = message.time
-      // this one time, let the event not propagate
-      video.addEventListener("seeked", () => { video.addEventListener("seeked", broadcastSeek) })
-    }
   })
-
-  video.addEventListener("volumechange", () => { banner.style.display = "none" })
 
   video.addEventListener("play", broadcastPlay)
   video.addEventListener("pause", broadcastPause)
+  video.addEventListener("seeked", broadcastSeek)
   video.addEventListener("waiting", () => {
     requestedWait = true
     broadcast({action: "wait"})
@@ -98,15 +92,13 @@
   })
 
   video.addEventListener("canplay", () => {
-    if (!requestedWait) {
-      return
-    }
+    if (!requestedWait) { return }
     broadcast({action: "canplay"})
     video.controls = true
     requestedWait = false
   })
+  video.addEventListener("volumechange", () => { banner.style.display = "none" })
 
-  video.addEventListener("seeked", broadcastSeek)
   </script>
 </body>
 </html>
