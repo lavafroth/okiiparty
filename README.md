@@ -16,9 +16,5 @@ go build .
 
 ## Stream
 
-- Use a web browser to connect to the server on the port used during deployment. For example: http://localhost:8000
+- Use a web browser to connect to the server on the deployed port. For example: http://localhost:8000
 - Ask your friends to join the party.
-
----
-
-okiiparty made with ❤️ for pookie
