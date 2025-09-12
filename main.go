@@ -10,6 +10,11 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+type Broker struct {
+	sockets map[*websocket.Conn]struct{}
+	mutex   sync.Mutex
+}
+
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  128,
 	WriteBufferSize: 128,
@@ -17,18 +22,7 @@ var upgrader = websocket.Upgrader{
 
 var broker Broker
 
-type Broker struct {
-	sockets map[*websocket.Conn]struct{}
-	mutex   sync.Mutex
-}
-
-func newStreamHandler(movieFile string) func(w http.ResponseWriter, r *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, movieFile)
-	}
-}
-
-func playPauseBroker(w http.ResponseWriter, r *http.Request) {
+func actionBroker(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("failed to fulfill client request for playPauseBroker: %v", err)
@@ -73,8 +67,10 @@ func main() {
 		log.Fatal("stream file is undefined")
 	}
 	broker.sockets = make(map[*websocket.Conn]struct{})
-	http.HandleFunc("/stream", newStreamHandler(streamFile))
-	http.HandleFunc("/broker", playPauseBroker)
+	http.HandleFunc("/stream", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, streamFile)
+	})
+	http.HandleFunc("/broker", actionBroker)
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "index.html")
 	})
