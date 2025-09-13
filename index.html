@@ -2,6 +2,7 @@
 <html>
 <head>
   <title>Okiiparty</title>
+  <link href="https://vjs.zencdn.net/8.23.3/video-js.css" rel="stylesheet" />
 
   <style>
   * {padding:0; margin: 0}
@@ -32,6 +33,25 @@
       text-decoration: none;
     }
   }
+
+  .video-js {
+    position: revert;
+    width: 100%;
+    height: 100%;
+
+    font-size: 1.5rem;
+  }
+
+  .hide {
+    animation: fade-out 0.5s forwards;
+  }
+
+  @keyframes fade-out {
+    100% {
+      opacity: 0;
+      display: none;
+    }
+  }
   </style>
 </head>
 
@@ -42,62 +62,78 @@
     </abbr>
   </div>
   
-  <video muted controls>
-    <source src="/stream" type="video/mp4">
+<video
+    id="video"
+    class="video-js"
+    controls
+    preload="auto"
+    muted
+    data-setup="{}"
+  >
+    <source src="/stream/stream.m3u8" />
+    <p class="vjs-no-js">
+      To view this video please enable JavaScript, and consider upgrading to a
+      web browser that
+      <a href="https://videojs.com/html5-video-support/" target="_blank">supports HTML5 video</a>
+    </p>
   </video>
+
+  <script src="https://vjs.zencdn.net/8.23.3/video.min.js"></script>
 
   <script>
   const loc = window.location;
   let proto = loc.protocol == "https:" ? "wss:" : "ws:";
   let host = loc.host;
+  const video = videojs("video");
   let wsUri = `${proto}//${host}/broker`;
   const socket = new WebSocket(wsUri);
-  const video = document.querySelector("video");
   const banner = document.querySelector(".banner");
   let requestedWait = false
 
   const broadcast = message => socket.send(JSON.stringify(message));
-  const broadcastSeek = () => broadcast({ action: "seek", time: video.currentTime })
+  const broadcastSeek = () => broadcast({ action: "seek", time: video.currentTime() })
   const broadcastPlay = () => broadcast({action: "play"});
   const broadcastPause = () => broadcast({action: "pause"});
 
   // Oneshot block for event propagatation
   function stepOverEvent(eventType, listener, stepFunction) {
-      video.removeEventListener(eventType, listener)
+      video.off(eventType, listener)
       stepFunction(video)
-      video.addEventListener(eventType, () => { video.addEventListener(eventType, listener) })
+      video.on(eventType, () => { video.on(eventType, listener) })
   }
 
   socket.addEventListener("message", (event) => {
     let message = JSON.parse(event.data)
     if (message.action == "play") { stepOverEvent("play", broadcastPlay, video => { video.play() }) }
     if (message.action == "pause") { stepOverEvent("pause", broadcastPause, video => { video.pause() }) }
-    if (message.action == "seek") { stepOverEvent("seeked", broadcastSeek, video => { video.currentTime = message.time }) }
+    if (message.action == "seek") { stepOverEvent("seeked", broadcastSeek, video => { video.currentTime(message.time) }) }
 
     if (message.action == "wait") {
-      if (!video.paused) { video.pause() }
-      video.controls = false
+      if (!video.paused()) { video.pause() }
+      video.controls(false)
     }
-    if (message.action == "canplay") { video.controls = true }
+    if (message.action == "canplay") { video.controls(true) }
 
   })
 
-  video.addEventListener("play", broadcastPlay)
-  video.addEventListener("pause", broadcastPause)
-  video.addEventListener("seeked", broadcastSeek)
-  video.addEventListener("waiting", () => {
+  video.on("play", broadcastPlay)
+  video.on("pause", broadcastPause)
+  video.on("seeked", broadcastSeek)
+  video.on("waiting", () => {
     requestedWait = true
     broadcast({action: "wait"})
-    video.controls = false
+    video.controls(false)
   })
 
-  video.addEventListener("canplay", () => {
+  video.on("canplay", () => {
     if (!requestedWait) { return }
     broadcast({action: "canplay"})
-    video.controls = true
+    video.controls(true)
     requestedWait = false
   })
-  video.addEventListener("volumechange", () => { banner.style.display = "none" })
+  video.on("volumechange", () => {
+    banner.classList.add('hide');
+  })
 
   </script>
 </body>
