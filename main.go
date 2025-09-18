@@ -1,7 +1,6 @@
 package main
 
 import (
-	"embed"
 	"flag"
 	"fmt"
 	"log"
@@ -13,7 +12,7 @@ import (
 
 type Broker struct {
 	sockets map[*websocket.Conn]struct{}
-	sync.Mutex
+	mutex   sync.Mutex
 }
 
 var upgrader = websocket.Upgrader{
@@ -23,9 +22,6 @@ var upgrader = websocket.Upgrader{
 
 var broker Broker
 
-//go:embed index.html
-var static embed.FS
-
 func actionBroker(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -33,10 +29,10 @@ func actionBroker(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	broker.Lock()
+	broker.mutex.Lock()
 	broker.sockets[conn] = struct{}{}
 	log.Printf("broker currently handles %d clients", len(broker.sockets))
-	broker.Unlock()
+	broker.mutex.Unlock()
 
 	for {
 		messageType, p, err := conn.ReadMessage()
@@ -71,10 +67,12 @@ func main() {
 		log.Fatal("stream file is undefined")
 	}
 	broker.sockets = make(map[*websocket.Conn]struct{})
-	http.Handle("/stream/", http.StripPrefix("/stream/", http.FileServer(http.Dir(streamFile))))
+	http.HandleFunc("/stream", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, streamFile)
+	})
 	http.HandleFunc("/broker", actionBroker)
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFileFS(w, r, static, "index.html")
+		http.ServeFile(w, r, "index.html")
 	})
 
 	panic(http.ListenAndServe(fmt.Sprintf(":%d", *listenPort), nil))
